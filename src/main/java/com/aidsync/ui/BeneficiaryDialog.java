@@ -69,10 +69,10 @@ public class BeneficiaryDialog extends JDialog {
     private JButton cancelButton;
     
     // ==================== Services & Data ====================
-    private BeneficiaryService beneficiaryService;
-    private Beneficiary beneficiary;
-    private User currentUser;
-    private Runnable onSaveCallback;
+    private final BeneficiaryService beneficiaryService;
+    private final Beneficiary beneficiary;
+    private final User currentUser;
+    private final Runnable onSaveCallback;
     
     // ==================== Color Constants ====================
     private static final Color PRIMARY_COLOR = new Color(0, 102, 204);
@@ -324,7 +324,7 @@ public class BeneficiaryDialog extends JDialog {
             barangayComboBox = new JComboBox<>(new String[]{currentUser.getBarangay()});
             barangayComboBox.setEnabled(false);
         } else {
-            barangayComboBox = new JComboBox<>(barangays.toArray(new String[0]));
+            barangayComboBox = new JComboBox<>(barangays.toArray(String[]::new));
         }
         
         barangayComboBox.setFont(INPUT_FONT);
@@ -353,7 +353,7 @@ public class BeneficiaryDialog extends JDialog {
         String selectedBarangay = (String) barangayComboBox.getSelectedItem();
         if (selectedBarangay != null && !selectedBarangay.isEmpty()) {
             List<String> puroks = BarangayData.getPuroksForBarangay(selectedBarangay);
-            purokComboBox.setModel(new DefaultComboBoxModel<>(puroks.toArray(new String[0])));
+            purokComboBox.setModel(new DefaultComboBoxModel<>(puroks.toArray(String[]::new)));
             purokComboBox.setEnabled(true);
         } else {
             purokComboBox.setModel(new DefaultComboBoxModel<>());
@@ -657,7 +657,6 @@ public class BeneficiaryDialog extends JDialog {
             showErrorDialog("Validation Error", ex.getMessage());
         } catch (Exception ex) {
             showErrorDialog("Error", "Error: " + ex.getMessage());
-            ex.printStackTrace();
         }
     }
     

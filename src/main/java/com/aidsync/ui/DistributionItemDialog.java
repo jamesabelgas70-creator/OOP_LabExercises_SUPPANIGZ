@@ -564,13 +564,18 @@ public class DistributionItemDialog extends JDialog {
      * Load active calamities
      */
     private void loadCalamities() {
+        System.out.println("DEBUG: Loading calamities for distribution dialog...");
         List<Calamity> calamities = calamityService.getActiveCalamities();
+        System.out.println("DEBUG: Retrieved " + calamities.size() + " active calamities from service");
+        
         DefaultComboBoxModel<Calamity> model = new DefaultComboBoxModel<>();
         model.addElement(null); // Allow no calamity selection
         for (Calamity calamity : calamities) {
             model.addElement(calamity);
+            System.out.println("DEBUG: Added calamity to dropdown: " + calamity.getName() + " (Status: " + calamity.getStatus() + ")");
         }
         calamityComboBox.setModel(model);
+        System.out.println("DEBUG: Calamity dropdown now has " + (model.getSize() - 1) + " calamities (plus null option)");
     }
     
     /**

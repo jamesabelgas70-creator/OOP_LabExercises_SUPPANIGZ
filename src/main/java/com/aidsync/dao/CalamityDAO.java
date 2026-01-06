@@ -19,6 +19,8 @@ public class CalamityDAO {
     public boolean createCalamity(Calamity calamity) {
         String sql = "INSERT INTO calamities (name, description, status) VALUES (?, ?, ?)";
         
+        System.out.println("Creating calamity: " + calamity.getName());
+        
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             
@@ -27,20 +29,24 @@ public class CalamityDAO {
             pstmt.setString(3, calamity.getStatus());
             
             int rowsAffected = pstmt.executeUpdate();
+            System.out.println("Rows affected: " + rowsAffected);
+            
             if (rowsAffected > 0) {
                 // Get generated ID
                 ResultSet rs = pstmt.getGeneratedKeys();
                 if (rs.next()) {
                     calamity.setId(rs.getInt(1));
+                    System.out.println("Generated calamity ID: " + calamity.getId());
                     // Insert calamity items
                     insertCalamityItems(calamity);
+                    System.out.println("Calamity created successfully");
                     return true;
                 }
             }
+            System.out.println("Failed to create calamity - no rows affected");
             return false;
         } catch (SQLException e) {
             System.err.println("Error creating calamity: " + e.getMessage());
-            e.printStackTrace();
             return false;
         }
     }
@@ -65,7 +71,6 @@ public class CalamityDAO {
             }
         } catch (SQLException e) {
             System.err.println("Error getting calamity: " + e.getMessage());
-            e.printStackTrace();
         }
         
         return null;
@@ -78,21 +83,27 @@ public class CalamityDAO {
         String sql = "SELECT * FROM calamities ORDER BY name";
         List<Calamity> calamities = new ArrayList<>();
         
+        System.out.println("Loading all calamities from database...");
+        
         try (Connection conn = DatabaseManager.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             
             while (rs.next()) {
                 Calamity calamity = mapResultSetToCalamity(rs);
-                // Load items
-                calamity.setItems(getCalamityItems(calamity.getId()));
                 calamities.add(calamity);
+                System.out.println("Loaded calamity: " + calamity.getName() + " (ID: " + calamity.getId() + ")");
             }
         } catch (SQLException e) {
             System.err.println("Error getting all calamities: " + e.getMessage());
-            e.printStackTrace();
         }
         
+        // Load items for each calamity separately to avoid connection conflicts
+        for (Calamity calamity : calamities) {
+            calamity.setItems(getCalamityItems(calamity.getId()));
+        }
+        
+        System.out.println("Total calamities loaded: " + calamities.size());
         return calamities;
     }
     
@@ -100,8 +111,24 @@ public class CalamityDAO {
      * Get active calamities only
      */
     public List<Calamity> getActiveCalamities() {
+        // First, let's see all calamities in the database
+        String debugSql = "SELECT id, name, status FROM calamities ORDER BY name";
+        System.out.println("DEBUG: All calamities in database:");
+        try (Connection conn = DatabaseManager.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(debugSql)) {
+            
+            while (rs.next()) {
+                System.out.println("DEBUG: - ID: " + rs.getInt("id") + ", Name: " + rs.getString("name") + ", Status: '" + rs.getString("status") + "'");
+            }
+        } catch (SQLException e) {
+            System.err.println("Error in debug query: " + e.getMessage());
+        }
+        
         String sql = "SELECT * FROM calamities WHERE status = 'Active' ORDER BY name";
         List<Calamity> calamities = new ArrayList<>();
+        
+        System.out.println("DEBUG: Querying active calamities with SQL: " + sql);
         
         try (Connection conn = DatabaseManager.getConnection();
              Statement stmt = conn.createStatement();
@@ -109,15 +136,16 @@ public class CalamityDAO {
             
             while (rs.next()) {
                 Calamity calamity = mapResultSetToCalamity(rs);
-                // Load items
-                calamity.setItems(getCalamityItems(calamity.getId()));
+                // Don't load items for dropdown - they're not needed and may cause issues
                 calamities.add(calamity);
+                System.out.println("DEBUG: Found active calamity: " + calamity.getName() + " (ID: " + calamity.getId() + ", Status: " + calamity.getStatus() + ")");
             }
         } catch (SQLException e) {
             System.err.println("Error getting active calamities: " + e.getMessage());
             e.printStackTrace();
         }
         
+        System.out.println("DEBUG: Total active calamities found: " + calamities.size());
         return calamities;
     }
     
@@ -144,7 +172,6 @@ public class CalamityDAO {
             return false;
         } catch (SQLException e) {
             System.err.println("Error updating calamity: " + e.getMessage());
-            e.printStackTrace();
             return false;
         }
     }
@@ -181,7 +208,6 @@ public class CalamityDAO {
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             System.err.println("Error deleting calamity: " + e.getMessage());
-            e.printStackTrace();
             return false;
         }
     }
@@ -216,7 +242,6 @@ public class CalamityDAO {
             }
         } catch (SQLException e) {
             System.err.println("Error checking calamity name: " + e.getMessage());
-            e.printStackTrace();
         }
         
         return false;
@@ -233,19 +258,19 @@ public class CalamityDAO {
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             
             pstmt.setInt(1, calamityId);
-            ResultSet rs = pstmt.executeQuery();
             
-            while (rs.next()) {
-                CalamityItem item = new CalamityItem();
-                item.setId(rs.getInt("id"));
-                item.setCalamityId(rs.getInt("calamity_id"));
-                item.setInventoryId(rs.getInt("inventory_id"));
-                item.setStandardQuantity(rs.getInt("standard_quantity"));
-                items.add(item);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    CalamityItem item = new CalamityItem();
+                    item.setId(rs.getInt("id"));
+                    item.setCalamityId(rs.getInt("calamity_id"));
+                    item.setInventoryId(rs.getInt("inventory_id"));
+                    item.setStandardQuantity(rs.getInt("standard_quantity"));
+                    items.add(item);
+                }
             }
         } catch (SQLException e) {
             System.err.println("Error getting calamity items: " + e.getMessage());
-            e.printStackTrace();
         }
         
         return items;
@@ -288,7 +313,6 @@ public class CalamityDAO {
             pstmt.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Error deleting calamity items: " + e.getMessage());
-            e.printStackTrace();
         }
     }
     

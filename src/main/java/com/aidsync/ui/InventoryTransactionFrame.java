@@ -128,6 +128,9 @@ public class InventoryTransactionFrame extends JFrame {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, PADDING_SMALL, 0));
         buttonPanel.setBackground(BACKGROUND_COLOR);
         
+        JButton backButton = createActionButton("Back", BACKGROUND_COLOR, LABEL_COLOR, e -> dispose());
+        buttonPanel.add(backButton);
+        
         refreshButton = createActionButton("Refresh", BACKGROUND_COLOR, LABEL_COLOR, e -> loadTransactions());
         buttonPanel.add(refreshButton);
         
@@ -257,29 +260,35 @@ public class InventoryTransactionFrame extends JFrame {
         transactionTable.setGridColor(BORDER_COLOR);
         transactionTable.setShowGrid(true);
         
-        // Custom renderer for transaction type coloring
+        // Custom renderer for transaction type coloring with improved selection
         transactionTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
                     boolean hasFocus, int row, int column) {
                 JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 
-                // Color coding based on transaction type
-                if (!isSelected && column == 2) { // Transaction Type column
-                    String type = (String) value;
-                    if ("Restock".equals(type)) {
-                        label.setBackground(RESTOCK_COLOR);
-                        label.setForeground(new Color(0, 100, 0));
-                    } else if ("Distribution".equals(type) || "Void Distribution".equals(type)) {
-                        label.setBackground(DISTRIBUTION_COLOR);
-                        label.setForeground(new Color(150, 0, 0));
+                // Enhanced selection colors take priority
+                if (isSelected) {
+                    label.setBackground(new Color(0, 102, 204, 40)); // Semi-transparent blue
+                    label.setForeground(PRIMARY_COLOR);
+                } else {
+                    // Color coding based on transaction type
+                    if (column == 2) { // Transaction Type column
+                        String type = (String) value;
+                        if ("Restock".equals(type)) {
+                            label.setBackground(RESTOCK_COLOR);
+                            label.setForeground(new Color(0, 100, 0));
+                        } else if ("Distribution".equals(type) || "Void Distribution".equals(type)) {
+                            label.setBackground(DISTRIBUTION_COLOR);
+                            label.setForeground(new Color(150, 0, 0));
+                        } else {
+                            label.setBackground(BACKGROUND_COLOR);
+                            label.setForeground(LABEL_COLOR);
+                        }
                     } else {
                         label.setBackground(BACKGROUND_COLOR);
                         label.setForeground(LABEL_COLOR);
                     }
-                } else if (!isSelected) {
-                    label.setBackground(BACKGROUND_COLOR);
-                    label.setForeground(LABEL_COLOR);
                 }
                 
                 // Center-left alignment
@@ -323,6 +332,18 @@ public class InventoryTransactionFrame extends JFrame {
         transactionTable.getTableHeader().setBackground(TABLE_HEADER_COLOR);
         transactionTable.getTableHeader().setForeground(LABEL_COLOR);
         transactionTable.getTableHeader().setReorderingAllowed(false);
+        
+        // Add deselect on empty space functionality
+        transactionTable.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                int row = transactionTable.rowAtPoint(evt.getPoint());
+                if (row == -1) {
+                    // Clicked on empty space - clear selection
+                    transactionTable.clearSelection();
+                }
+            }
+        });
         
         JScrollPane scrollPane = new JScrollPane(transactionTable);
         scrollPane.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1));

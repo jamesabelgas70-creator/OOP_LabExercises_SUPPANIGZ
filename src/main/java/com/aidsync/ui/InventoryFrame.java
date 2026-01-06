@@ -158,6 +158,10 @@ public class InventoryFrame extends JFrame {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, PADDING_SMALL, 0));
         buttonPanel.setBackground(BACKGROUND_COLOR);
         
+        // Back button (navigation)
+        JButton backButton = createSecondaryButton("Back", e -> dispose());
+        buttonPanel.add(backButton);
+        
         // View/Refresh buttons (secondary actions)
         refreshButton = createSecondaryButton("Refresh", e -> {
             loadInventory();
@@ -340,7 +344,7 @@ public class InventoryFrame extends JFrame {
         inventoryTable.getTableHeader().setForeground(LABEL_COLOR);
         inventoryTable.getTableHeader().setReorderingAllowed(false);
         
-        // Custom renderer for Integer columns (to left-align numbers)
+        // Custom renderer for Integer columns with improved selection and low stock highlighting
         inventoryTable.setDefaultRenderer(Integer.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
@@ -351,7 +355,10 @@ public class InventoryFrame extends JFrame {
                 label.setHorizontalAlignment(SwingConstants.LEFT);
                 label.setVerticalAlignment(SwingConstants.CENTER);
                 
-                if (!isSelected) {
+                if (isSelected) {
+                    label.setBackground(new Color(0, 102, 204, 40)); // Semi-transparent blue
+                    label.setForeground(PRIMARY_COLOR);
+                } else {
                     String status = (String) tableModel.getValueAt(row, 6);
                     if ("Low Stock".equals(status)) {
                         label.setBackground(LOW_STOCK_COLOR);
@@ -366,7 +373,7 @@ public class InventoryFrame extends JFrame {
             }
         });
         
-        // Custom renderer for all other cells (low stock highlighting and center-left alignment)
+        // Custom renderer for all other cells with improved selection and low stock highlighting
         inventoryTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
@@ -377,7 +384,10 @@ public class InventoryFrame extends JFrame {
                 label.setHorizontalAlignment(SwingConstants.LEFT);
                 label.setVerticalAlignment(SwingConstants.CENTER);
                 
-                if (!isSelected) {
+                if (isSelected) {
+                    label.setBackground(new Color(0, 102, 204, 40)); // Semi-transparent blue
+                    label.setForeground(PRIMARY_COLOR);
+                } else {
                     String status = (String) tableModel.getValueAt(row, 6);
                     if ("Low Stock".equals(status)) {
                         label.setBackground(LOW_STOCK_COLOR);
@@ -392,11 +402,15 @@ public class InventoryFrame extends JFrame {
             }
         });
         
-        // Enable double-click to edit
+        // Enable double-click to edit and deselect on empty space
         inventoryTable.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent evt) {
-                if (evt.getClickCount() == 2) {
+                int row = inventoryTable.rowAtPoint(evt.getPoint());
+                if (row == -1) {
+                    // Clicked on empty space - clear selection
+                    inventoryTable.clearSelection();
+                } else if (evt.getClickCount() == 2) {
                     editSelectedItem();
                 }
             }

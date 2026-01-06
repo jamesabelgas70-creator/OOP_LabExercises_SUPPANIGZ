@@ -29,6 +29,18 @@ public class DistributionFrame extends JFrame {
     private JTextField searchField;
     private JButton searchButton;
     private JButton refreshButton;
+    private JComboBox<String> barangayFilter;
+    private JComboBox<String> statusFilter;
+    private JProgressBar progressBar;
+    private JLabel statusLabel;
+    
+    // ==================== Pagination ====================
+    private int currentPage = 0;
+    private int pageSize = 100;
+    private int totalRecords = 0;
+    private JButton prevButton;
+    private JButton nextButton;
+    private JLabel pageLabel;
     
     // ==================== Services & Data ====================
     private User currentUser;
@@ -68,6 +80,7 @@ public class DistributionFrame extends JFrame {
         this.distributionService = new DistributionService();
         this.inventoryService = new InventoryService();
         initializeUI();
+        initializeFilters();
         loadBeneficiaries();
     }
     
@@ -145,6 +158,33 @@ public class DistributionFrame extends JFrame {
         searchButton = createSearchButton();
         searchPanel.add(searchButton);
         
+        // Add filters
+        JLabel barangayLabel = new JLabel("Barangay:");
+        barangayLabel.setFont(LABEL_FONT);
+        barangayLabel.setForeground(LABEL_COLOR);
+        searchPanel.add(barangayLabel);
+        
+        barangayFilter = new JComboBox<>();
+        barangayFilter.setFont(LABEL_FONT);
+        barangayFilter.setPreferredSize(new Dimension(120, BUTTON_HEIGHT));
+        barangayFilter.addItem("All");
+        barangayFilter.addActionListener(e -> performSearch());
+        searchPanel.add(barangayFilter);
+        
+        JLabel statusLabel = new JLabel("Status:");
+        statusLabel.setFont(LABEL_FONT);
+        statusLabel.setForeground(LABEL_COLOR);
+        searchPanel.add(statusLabel);
+        
+        statusFilter = new JComboBox<>();
+        statusFilter.setFont(LABEL_FONT);
+        statusFilter.setPreferredSize(new Dimension(100, BUTTON_HEIGHT));
+        statusFilter.addItem("All");
+        statusFilter.addItem("Never Distributed");
+        statusFilter.addItem("Recently Distributed");
+        statusFilter.addActionListener(e -> performSearch());
+        searchPanel.add(statusFilter);
+        
         return searchPanel;
     }
     
@@ -155,10 +195,14 @@ public class DistributionFrame extends JFrame {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, PADDING_SMALL, 0));
         buttonPanel.setBackground(BACKGROUND_COLOR);
         
+        JButton backButton = createActionButton("Back", BACKGROUND_COLOR, LABEL_COLOR, e -> dispose());
         refreshButton = createActionButton("Refresh", BACKGROUND_COLOR, LABEL_COLOR, e -> loadBeneficiaries());
+        buttonPanel.add(backButton);
         buttonPanel.add(refreshButton);
         
+        JButton batchDistributeButton = createPrimaryButton("Batch Distribute", e -> openBatchDistributeDialog());
         JButton quickDistributeButton = createPrimaryButton("Quick Distribute", e -> openQuickDistributeDialog());
+        buttonPanel.add(batchDistributeButton);
         buttonPanel.add(quickDistributeButton);
         
         return buttonPanel;
@@ -259,15 +303,39 @@ public class DistributionFrame extends JFrame {
         JPanel tablePanel = new JPanel(new BorderLayout());
         tablePanel.setBackground(BACKGROUND_COLOR);
         
-        // Instruction label
-        JLabel instructionLabel = new JLabel("Double-click on a beneficiary to view distribution history and add new distributions");
+        // Top panel with instruction and progress
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.setBackground(BACKGROUND_COLOR);
+        
+        JLabel instructionLabel = new JLabel("Double-click to distribute | Ctrl+Click for multi-select | Right-click for batch actions");
         instructionLabel.setFont(new Font("Segoe UI", Font.ITALIC, 12));
         instructionLabel.setForeground(new Color(100, 100, 100));
         instructionLabel.setBorder(new EmptyBorder(0, 0, PADDING_SMALL, 0));
-        tablePanel.add(instructionLabel, BorderLayout.NORTH);
+        topPanel.add(instructionLabel, BorderLayout.WEST);
+        
+        // Progress bar and status
+        JPanel progressPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        progressPanel.setBackground(BACKGROUND_COLOR);
+        
+        statusLabel = new JLabel("Ready");
+        statusLabel.setFont(LABEL_FONT);
+        statusLabel.setForeground(LABEL_COLOR);
+        progressPanel.add(statusLabel);
+        
+        progressBar = new JProgressBar();
+        progressBar.setPreferredSize(new Dimension(200, 20));
+        progressBar.setVisible(false);
+        progressPanel.add(progressBar);
+        
+        topPanel.add(progressPanel, BorderLayout.EAST);
+        tablePanel.add(topPanel, BorderLayout.NORTH);
         
         JScrollPane scrollPane = createTableScrollPane();
         tablePanel.add(scrollPane, BorderLayout.CENTER);
+        
+        // Pagination panel
+        JPanel paginationPanel = createPaginationPanel();
+        tablePanel.add(paginationPanel, BorderLayout.SOUTH);
         
         return tablePanel;
     }
@@ -293,7 +361,7 @@ public class DistributionFrame extends JFrame {
         beneficiaryTable = new JTable(tableModel);
         beneficiaryTable.setFont(TABLE_FONT);
         beneficiaryTable.setRowHeight(30);
-        beneficiaryTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        beneficiaryTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         beneficiaryTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
         beneficiaryTable.setGridColor(BORDER_COLOR);
         beneficiaryTable.setShowGrid(true);
@@ -305,7 +373,7 @@ public class DistributionFrame extends JFrame {
         beneficiaryTable.getTableHeader().setForeground(LABEL_COLOR);
         beneficiaryTable.getTableHeader().setReorderingAllowed(false);
         
-        // Custom renderer for Integer columns (to left-align numbers)
+        // Custom renderer for Integer columns with improved selection
         beneficiaryTable.setDefaultRenderer(Integer.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
@@ -316,11 +384,20 @@ public class DistributionFrame extends JFrame {
                 label.setHorizontalAlignment(SwingConstants.LEFT);
                 label.setVerticalAlignment(SwingConstants.CENTER);
                 
+                // Enhanced selection colors
+                if (isSelected) {
+                    label.setBackground(new Color(0, 102, 204, 40)); // Semi-transparent blue
+                    label.setForeground(PRIMARY_COLOR);
+                } else {
+                    label.setBackground(BACKGROUND_COLOR);
+                    label.setForeground(LABEL_COLOR);
+                }
+                
                 return label;
             }
         });
         
-        // Custom renderer for all other cells (center-left alignment)
+        // Custom renderer for all other cells with improved selection
         beneficiaryTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
@@ -331,6 +408,15 @@ public class DistributionFrame extends JFrame {
                 label.setHorizontalAlignment(SwingConstants.LEFT);
                 label.setVerticalAlignment(SwingConstants.CENTER);
                 
+                // Enhanced selection colors
+                if (isSelected) {
+                    label.setBackground(new Color(0, 102, 204, 40)); // Semi-transparent blue
+                    label.setForeground(PRIMARY_COLOR);
+                } else {
+                    label.setBackground(BACKGROUND_COLOR);
+                    label.setForeground(LABEL_COLOR);
+                }
+                
                 return label;
             }
         });
@@ -339,12 +425,29 @@ public class DistributionFrame extends JFrame {
         beneficiaryTable.setRowSelectionAllowed(true);
         beneficiaryTable.setColumnSelectionAllowed(false);
         
-        // Add double-click to open distribution details
+        // Add double-click to open distribution details and right-click for batch actions
         beneficiaryTable.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent evt) {
-                if (evt.getClickCount() == 2) {
+                int row = beneficiaryTable.rowAtPoint(evt.getPoint());
+                if (row == -1) {
+                    beneficiaryTable.clearSelection();
+                } else if (evt.getClickCount() == 2) {
                     openBeneficiaryDistributionDialog();
+                }
+            }
+            
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent evt) {
+                if (evt.isPopupTrigger()) {
+                    showBatchContextMenu(evt);
+                }
+            }
+            
+            @Override
+            public void mouseReleased(java.awt.event.MouseEvent evt) {
+                if (evt.isPopupTrigger()) {
+                    showBatchContextMenu(evt);
                 }
             }
         });
@@ -365,69 +468,92 @@ public class DistributionFrame extends JFrame {
     // ==================== Data Operations ====================
     
     /**
-     * Load all beneficiaries with distribution statistics
+     * Load beneficiaries with pagination (keeps existing method for compatibility)
      */
     private void loadBeneficiaries() {
-        tableModel.setRowCount(0);
-        List<Beneficiary> beneficiaries = beneficiaryService.getAllBeneficiaries();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        
-        for (Beneficiary b : beneficiaries) {
-            // Get distribution statistics
-            com.aidsync.dao.DistributionDAO.DistributionStats stats = 
-                distributionService.getDistributionStats(b.getId());
-            
-            Object[] row = {
-                b.getBeneficiaryId(),
-                b.getFullName(),
-                b.getBarangay(),
-                b.getPurok(),
-                b.getFamilySize(),
-                stats.getDistributionCount(),
-                stats.getLastDistributionDate() != null ? 
-                    stats.getLastDistributionDate().format(formatter) : "Never",
-                stats.getTotalItemsReceived()
-            };
-            tableModel.addRow(row);
-        }
-        
-        // Clear search field
-        searchField.setText("");
+        loadBeneficiariesPaginated(currentPage, pageSize);
     }
     
     /**
-     * Perform search operation
+     * Load beneficiaries with pagination support
+     */
+    private void loadBeneficiariesPaginated(int page, int size) {
+        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                SwingUtilities.invokeLater(() -> {
+                    progressBar.setVisible(true);
+                    progressBar.setIndeterminate(true);
+                    statusLabel.setText("Loading beneficiaries...");
+                });
+                
+                List<Beneficiary> allBeneficiaries = beneficiaryService.getAllBeneficiaries();
+                totalRecords = allBeneficiaries.size();
+                
+                // Apply filters
+                allBeneficiaries = applyFilters(allBeneficiaries);
+                
+                // Pagination
+                int start = page * size;
+                int end = Math.min(start + size, allBeneficiaries.size());
+                List<Beneficiary> pageBeneficiaries = allBeneficiaries.subList(start, end);
+                
+                SwingUtilities.invokeLater(() -> {
+                    tableModel.setRowCount(0);
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                    
+                    for (Beneficiary b : pageBeneficiaries) {
+                        com.aidsync.dao.DistributionDAO.DistributionStats stats = 
+                            distributionService.getDistributionStats(b.getId());
+                        
+                        Object[] row = {
+                            b.getBeneficiaryId(),
+                            b.getFullName(),
+                            b.getBarangay(),
+                            b.getPurok(),
+                            b.getFamilySize(),
+                            stats.getDistributionCount(),
+                            stats.getLastDistributionDate() != null ? 
+                                stats.getLastDistributionDate().format(formatter) : "Never",
+                            stats.getTotalItemsReceived()
+                        };
+                        tableModel.addRow(row);
+                    }
+                    
+                    updatePaginationControls();
+                    progressBar.setVisible(false);
+                    statusLabel.setText("Showing " + pageBeneficiaries.size() + " of " + totalRecords + " beneficiaries");
+                });
+                
+                return null;
+            }
+        };
+        worker.execute();
+    }
+    
+    /**
+     * Perform search operation with filters
      */
     private void performSearch() {
-        String searchTerm = searchField.getText().trim();
-        tableModel.setRowCount(0);
-        
-        List<Beneficiary> beneficiaries;
-        if (searchTerm.isEmpty()) {
-            beneficiaries = beneficiaryService.getAllBeneficiaries();
-        } else {
-            beneficiaries = beneficiaryService.searchBeneficiaries(searchTerm);
+        currentPage = 0; // Reset to first page when searching
+        loadBeneficiaries();
+    }
+    
+    /**
+     * Initialize filter dropdowns
+     */
+    private void initializeFilters() {
+        // Load barangays
+        java.util.Set<String> barangays = new java.util.HashSet<>();
+        List<Beneficiary> allBeneficiaries = beneficiaryService.getAllBeneficiaries();
+        for (Beneficiary b : allBeneficiaries) {
+            if (b.getBarangay() != null) {
+                barangays.add(b.getBarangay());
+            }
         }
         
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        
-        for (Beneficiary b : beneficiaries) {
-            // Get distribution statistics
-            com.aidsync.dao.DistributionDAO.DistributionStats stats = 
-                distributionService.getDistributionStats(b.getId());
-            
-            Object[] row = {
-                b.getBeneficiaryId(),
-                b.getFullName(),
-                b.getBarangay(),
-                b.getPurok(),
-                b.getFamilySize(),
-                stats.getDistributionCount(),
-                stats.getLastDistributionDate() != null ? 
-                    stats.getLastDistributionDate().format(formatter) : "Never",
-                stats.getTotalItemsReceived()
-            };
-            tableModel.addRow(row);
+        for (String barangay : barangays) {
+            barangayFilter.addItem(barangay);
         }
     }
     
@@ -478,7 +604,6 @@ public class DistributionFrame extends JFrame {
         
         if (beneficiary != null) {
             SwingUtilities.invokeLater(() -> {
-                // Create a temporary dialog parent for DistributionItemDialog
                 JDialog tempDialog = new JDialog(this, true);
                 tempDialog.setVisible(false);
                 
@@ -495,6 +620,138 @@ public class DistributionFrame extends JFrame {
             });
         } else {
             showWarningDialog("Error", "Beneficiary not found.");
+        }
+    }
+    
+    // ==================== New Efficiency Methods ====================
+    
+    /**
+     * Create pagination panel
+     */
+    private JPanel createPaginationPanel() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        panel.setBackground(BACKGROUND_COLOR);
+        panel.setBorder(new EmptyBorder(PADDING_SMALL, 0, 0, 0));
+        
+        prevButton = new JButton("Previous");
+        prevButton.setFont(LABEL_FONT);
+        prevButton.addActionListener(e -> {
+            if (currentPage > 0) {
+                currentPage--;
+                loadBeneficiaries();
+            }
+        });
+        
+        nextButton = new JButton("Next");
+        nextButton.setFont(LABEL_FONT);
+        nextButton.addActionListener(e -> {
+            currentPage++;
+            loadBeneficiaries();
+        });
+        
+        pageLabel = new JLabel("Page 1");
+        pageLabel.setFont(LABEL_FONT);
+        pageLabel.setBorder(new EmptyBorder(0, 20, 0, 20));
+        
+        panel.add(prevButton);
+        panel.add(pageLabel);
+        panel.add(nextButton);
+        
+        return panel;
+    }
+    
+    /**
+     * Update pagination controls
+     */
+    private void updatePaginationControls() {
+        int totalPages = (int) Math.ceil((double) totalRecords / pageSize);
+        pageLabel.setText("Page " + (currentPage + 1) + " of " + Math.max(1, totalPages));
+        prevButton.setEnabled(currentPage > 0);
+        nextButton.setEnabled(currentPage < totalPages - 1);
+    }
+    
+    /**
+     * Apply filters to beneficiary list
+     */
+    private List<Beneficiary> applyFilters(List<Beneficiary> beneficiaries) {
+        String selectedBarangay = (String) barangayFilter.getSelectedItem();
+        String selectedStatus = (String) statusFilter.getSelectedItem();
+        String searchTerm = searchField.getText().trim().toLowerCase();
+        
+        return beneficiaries.stream()
+            .filter(b -> selectedBarangay.equals("All") || b.getBarangay().equals(selectedBarangay))
+            .filter(b -> {
+                if (selectedStatus.equals("All")) return true;
+                if (selectedStatus.equals("Never Distributed")) {
+                    com.aidsync.dao.DistributionDAO.DistributionStats stats = distributionService.getDistributionStats(b.getId());
+                    return stats.getDistributionCount() == 0;
+                }
+                return true;
+            })
+            .filter(b -> searchTerm.isEmpty() || 
+                b.getFullName().toLowerCase().contains(searchTerm) ||
+                b.getBeneficiaryId().toLowerCase().contains(searchTerm))
+            .collect(java.util.stream.Collectors.toList());
+    }
+    
+    /**
+     * Show batch context menu
+     */
+    private void showBatchContextMenu(java.awt.event.MouseEvent evt) {
+        int[] selectedRows = beneficiaryTable.getSelectedRows();
+        if (selectedRows.length == 0) return;
+        
+        JPopupMenu contextMenu = new JPopupMenu();
+        
+        JMenuItem batchDistribute = new JMenuItem("Batch Distribute (" + selectedRows.length + ")");
+        batchDistribute.addActionListener(e -> openBatchDistributeDialog());
+        contextMenu.add(batchDistribute);
+        
+        if (selectedRows.length == 1) {
+            contextMenu.addSeparator();
+            JMenuItem quickDistribute = new JMenuItem("Quick Distribute");
+            quickDistribute.addActionListener(e -> openQuickDistributeDialog());
+            contextMenu.add(quickDistribute);
+            
+            JMenuItem viewHistory = new JMenuItem("View History");
+            viewHistory.addActionListener(e -> openBeneficiaryDistributionDialog());
+            contextMenu.add(viewHistory);
+        }
+        
+        contextMenu.show(beneficiaryTable, evt.getX(), evt.getY());
+    }
+    
+    /**
+     * Open batch distribute dialog
+     */
+    private void openBatchDistributeDialog() {
+        int[] selectedRows = beneficiaryTable.getSelectedRows();
+        if (selectedRows.length == 0) {
+            showWarningDialog("No Selection", "Please select beneficiaries for batch distribution.");
+            return;
+        }
+        
+        java.util.List<Beneficiary> selectedBeneficiaries = new java.util.ArrayList<>();
+        for (int row : selectedRows) {
+            String beneficiaryId = (String) tableModel.getValueAt(row, 0);
+            Beneficiary beneficiary = beneficiaryService.getBeneficiaryByBeneficiaryId(beneficiaryId);
+            if (beneficiary != null) {
+                selectedBeneficiaries.add(beneficiary);
+            }
+        }
+        
+        if (!selectedBeneficiaries.isEmpty()) {
+            SwingUtilities.invokeLater(() -> {
+                BatchDistributeDialog dialog = new BatchDistributeDialog(
+                    this,
+                    selectedBeneficiaries,
+                    distributionService,
+                    inventoryService,
+                    currentUser,
+                    () -> loadBeneficiaries()
+                );
+                dialog.setVisible(true);
+            });
         }
     }
     

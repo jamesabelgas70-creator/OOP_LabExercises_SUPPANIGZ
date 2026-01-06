@@ -3,7 +3,6 @@ package com.aidsync.service;
 import com.aidsync.dao.BeneficiaryDAO;
 import com.aidsync.model.Beneficiary;
 import com.aidsync.model.FilterCriteria;
-import com.aidsync.service.ActivityLogService;
 import com.aidsync.util.BarangayData;
 
 import java.time.LocalDate;
@@ -188,16 +187,14 @@ public class BeneficiaryService {
     
     private boolean matchesFamilySize(Beneficiary b, Integer min, Integer max) {
         if (min != null && b.getFamilySize() < min) return false;
-        if (max != null && b.getFamilySize() > max) return false;
-        return true;
+        return max == null || b.getFamilySize() <= max;
     }
     
     private boolean matchesDateRange(Beneficiary b, LocalDate from, LocalDate to) {
         if (b.getDateRegistered() == null) return true;
         LocalDate regDate = b.getDateRegistered().toLocalDate();
         if (from != null && regDate.isBefore(from)) return false;
-        if (to != null && regDate.isAfter(to)) return false;
-        return true;
+        return to == null || !regDate.isAfter(to);
     }
     
     /**

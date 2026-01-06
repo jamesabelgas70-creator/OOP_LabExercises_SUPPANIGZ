@@ -157,12 +157,14 @@ public class UserManagementFrame extends JFrame {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, PADDING_SMALL, 0));
         buttonPanel.setBackground(BACKGROUND_COLOR);
         
+        JButton backButton = createActionButton("Back", BACKGROUND_COLOR, LABEL_COLOR, e -> dispose());
         refreshButton = createActionButton("Refresh", BACKGROUND_COLOR, LABEL_COLOR, e -> loadUsers());
         resetPasswordButton = createActionButton("Reset Password", PRIMARY_COLOR, Color.WHITE, e -> resetPassword());
         editButton = createActionButton("Edit", PRIMARY_COLOR, Color.WHITE, e -> editSelectedUser());
         deleteButton = createActionButton("Delete", DELETE_COLOR, Color.WHITE, e -> deleteSelectedUser());
         addButton = createActionButton("Add New", PRIMARY_COLOR, Color.WHITE, e -> openAddEditDialog(null));
         
+        buttonPanel.add(backButton);
         buttonPanel.add(refreshButton);
         buttonPanel.add(resetPasswordButton);
         buttonPanel.add(editButton);
@@ -298,7 +300,7 @@ public class UserManagementFrame extends JFrame {
         userTable.getTableHeader().setForeground(LABEL_COLOR);
         userTable.getTableHeader().setReorderingAllowed(false);
         
-        // Custom renderer for Integer columns (to left-align numbers)
+        // Custom renderer for Integer columns with improved selection
         userTable.setDefaultRenderer(Integer.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
@@ -309,11 +311,20 @@ public class UserManagementFrame extends JFrame {
                 label.setHorizontalAlignment(SwingConstants.LEFT);
                 label.setVerticalAlignment(SwingConstants.CENTER);
                 
+                // Enhanced selection colors
+                if (isSelected) {
+                    label.setBackground(new Color(0, 102, 204, 40)); // Semi-transparent blue
+                    label.setForeground(PRIMARY_COLOR);
+                } else {
+                    label.setBackground(BACKGROUND_COLOR);
+                    label.setForeground(LABEL_COLOR);
+                }
+                
                 return label;
             }
         });
         
-        // Custom renderer for all other cells (center-left alignment)
+        // Custom renderer for all other cells with improved selection
         userTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
@@ -324,6 +335,15 @@ public class UserManagementFrame extends JFrame {
                 label.setHorizontalAlignment(SwingConstants.LEFT);
                 label.setVerticalAlignment(SwingConstants.CENTER);
                 
+                // Enhanced selection colors
+                if (isSelected) {
+                    label.setBackground(new Color(0, 102, 204, 40)); // Semi-transparent blue
+                    label.setForeground(PRIMARY_COLOR);
+                } else {
+                    label.setBackground(BACKGROUND_COLOR);
+                    label.setForeground(LABEL_COLOR);
+                }
+                
                 return label;
             }
         });
@@ -332,11 +352,15 @@ public class UserManagementFrame extends JFrame {
         userTable.setRowSelectionAllowed(true);
         userTable.setColumnSelectionAllowed(false);
         
-        // Add double-click to edit
+        // Add double-click to edit and deselect on empty space
         userTable.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent evt) {
-                if (evt.getClickCount() == 2) {
+                int row = userTable.rowAtPoint(evt.getPoint());
+                if (row == -1) {
+                    // Clicked on empty space - clear selection
+                    userTable.clearSelection();
+                } else if (evt.getClickCount() == 2) {
                     editSelectedUser();
                 }
             }

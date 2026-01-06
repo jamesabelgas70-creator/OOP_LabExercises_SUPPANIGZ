@@ -17,8 +17,8 @@ public class Main {
         // Set look and feel
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | javax.swing.UnsupportedLookAndFeelException e) {
+            System.err.println("Failed to set system look and feel: " + e.getMessage());
         }
         
         // Start application

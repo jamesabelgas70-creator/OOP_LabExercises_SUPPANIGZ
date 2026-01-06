@@ -32,12 +32,13 @@ public class CalamityDialog extends JDialog {
     private JComboBox<String> statusComboBox;
     private JTable itemsTable;
     private DefaultTableModel itemsTableModel;
-    private JComboBox<InventoryItem> itemComboBox;
     private JSpinner quantitySpinner;
     private JButton addItemButton;
     private JButton removeItemButton;
     private JButton saveButton;
     private JButton cancelButton;
+    private DefaultListModel<InventoryItemWrapper> itemListModel;
+    private JList<InventoryItemWrapper> itemJList;
     
     // ==================== Services & Data ====================
     private CalamityService calamityService;
@@ -204,60 +205,72 @@ public class CalamityDialog extends JDialog {
         JScrollPane tableScrollPane = createItemsTable();
         sectionPanel.add(tableScrollPane, BorderLayout.CENTER);
         
-        // Add item panel
-        JPanel addItemPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, PADDING_SMALL, PADDING_SMALL));
+        // Multi-select item panel with checkboxes
+        JPanel addItemPanel = new JPanel(new BorderLayout(PADDING_SMALL, PADDING_SMALL));
         addItemPanel.setBackground(BACKGROUND_COLOR);
         
-        JLabel itemLabel = new JLabel("Item:");
-        itemLabel.setFont(LABEL_FONT);
-        itemLabel.setForeground(LABEL_COLOR);
-        addItemPanel.add(itemLabel);
+        // Available items list with checkboxes
+        JPanel itemListPanel = new JPanel(new BorderLayout());
+        itemListPanel.setBorder(BorderFactory.createTitledBorder("Available Items (Select Multiple)"));
         
-        itemComboBox = new JComboBox<>();
-        itemComboBox.setFont(INPUT_FONT);
-        itemComboBox.setPreferredSize(new Dimension(250, INPUT_HEIGHT));
-        itemComboBox.setRenderer(new DefaultListCellRenderer() {
+        DefaultListModel<InventoryItemWrapper> listModel = new DefaultListModel<>();
+        JList<InventoryItemWrapper> itemList = new JList<>(listModel);
+        itemList.setCellRenderer(new CheckBoxListCellRenderer());
+        itemList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        
+        itemList.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
-                    boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if (value instanceof InventoryItem) {
-                    InventoryItem item = (InventoryItem) value;
-                    setText(item.getItemName() + " (" + item.getUnit() + ") - Available: " + item.getQuantity());
-                }
-                return this;
-            }
-        });
-        // Update spinner max when item selection changes
-        itemComboBox.addActionListener(e -> {
-            InventoryItem selected = (InventoryItem) itemComboBox.getSelectedItem();
-            if (selected != null) {
-                SpinnerNumberModel model = (SpinnerNumberModel) quantitySpinner.getModel();
-                model.setMaximum(selected.getQuantity());
-                if ((Integer) quantitySpinner.getValue() > selected.getQuantity()) {
-                    quantitySpinner.setValue(selected.getQuantity());
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                int index = itemList.locationToIndex(evt.getPoint());
+                if (index >= 0 && itemList.getCellBounds(index, index).contains(evt.getPoint())) {
+                    InventoryItemWrapper wrapper = listModel.getElementAt(index);
+                    wrapper.setSelected(!wrapper.isSelected());
+                    itemList.repaint();
+                } else {
+                    // Clicked on empty space - clear selection
+                    itemList.clearSelection();
                 }
             }
         });
-        addItemPanel.add(itemComboBox);
+        
+        JScrollPane listScrollPane = new JScrollPane(itemList);
+        listScrollPane.setPreferredSize(new Dimension(0, 150));
+        itemListPanel.add(listScrollPane, BorderLayout.CENTER);
+        
+        // Quantity input and buttons
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        controlPanel.setBackground(BACKGROUND_COLOR);
         
         JLabel quantityLabel = new JLabel("Standard Quantity:");
         quantityLabel.setFont(LABEL_FONT);
         quantityLabel.setForeground(LABEL_COLOR);
-        addItemPanel.add(quantityLabel);
+        controlPanel.add(quantityLabel);
         
         quantitySpinner = new JSpinner(new SpinnerNumberModel(1, 1, Integer.MAX_VALUE, 1));
         quantitySpinner.setFont(INPUT_FONT);
         quantitySpinner.setPreferredSize(new Dimension(80, INPUT_HEIGHT));
-        addItemPanel.add(quantitySpinner);
+        controlPanel.add(quantitySpinner);
         
-        addItemButton = createActionButton("Add", PRIMARY_COLOR, Color.WHITE, e -> addItem());
-        addItemPanel.add(addItemButton);
+        addItemButton = createActionButton("Add Selected", PRIMARY_COLOR, Color.WHITE, e -> addSelectedItems(listModel));
+        controlPanel.add(addItemButton);
         
         removeItemButton = createActionButton("Remove", new Color(220, 53, 69), Color.WHITE, e -> removeSelectedItem());
-        addItemPanel.add(removeItemButton);
+        controlPanel.add(removeItemButton);
+        
+        JButton selectAllButton = createActionButton("Select All", BACKGROUND_COLOR, LABEL_COLOR, e -> selectAllItems(listModel, itemList, true));
+        controlPanel.add(selectAllButton);
+        
+        JButton deselectAllButton = createActionButton("Deselect All", BACKGROUND_COLOR, LABEL_COLOR, e -> selectAllItems(listModel, itemList, false));
+        controlPanel.add(deselectAllButton);
+        
+        addItemPanel.add(itemListPanel, BorderLayout.CENTER);
+        addItemPanel.add(controlPanel, BorderLayout.SOUTH);
         
         sectionPanel.add(addItemPanel, BorderLayout.SOUTH);
+        
+        // Store reference for loading items
+        this.itemListModel = listModel;
+        this.itemJList = itemList;
         
         return sectionPanel;
     }
@@ -463,11 +476,11 @@ public class CalamityDialog extends JDialog {
      */
     private void loadInventoryItems() {
         availableItems = inventoryService.getAllInventoryItems();
-        DefaultComboBoxModel<InventoryItem> model = new DefaultComboBoxModel<>();
+        itemListModel.clear();
+        
         for (InventoryItem item : availableItems) {
-            model.addElement(item);
+            itemListModel.addElement(new InventoryItemWrapper(item));
         }
-        itemComboBox.setModel(model);
     }
     
     /**
@@ -514,55 +527,7 @@ public class CalamityDialog extends JDialog {
         }
     }
     
-    /**
-     * Add item to calamity
-     */
-    private void addItem() {
-        InventoryItem selectedItem = (InventoryItem) itemComboBox.getSelectedItem();
-        if (selectedItem == null) {
-            showError("Please select an item.");
-            return;
-        }
-        
-        if (assignedItems.containsKey(selectedItem.getId())) {
-            showError("This item is already assigned to this calamity.");
-            return;
-        }
-        
-        // Validate that quantity doesn't exceed inventory quantity
-        // Refresh item to get current stock
-        InventoryItem currentItem = inventoryService.getInventoryItemById(selectedItem.getId());
-        if (currentItem == null) {
-            showError("Item no longer exists in inventory.");
-            loadInventoryItems();
-            return;
-        }
-        
-        // Update spinner maximum to current inventory quantity
-        SpinnerNumberModel spinnerModel = (SpinnerNumberModel) quantitySpinner.getModel();
-        spinnerModel.setMaximum(currentItem.getQuantity());
-        
-        int quantity = (Integer) quantitySpinner.getValue();
-        
-        if (quantity > currentItem.getQuantity()) {
-            showError(String.format(
-                "Standard quantity (%d) cannot exceed available inventory quantity (%d %s). " +
-                "The quantity has been adjusted to the maximum available.",
-                quantity, currentItem.getQuantity(), currentItem.getUnit()
-            ));
-            quantity = currentItem.getQuantity();
-            quantitySpinner.setValue(quantity);
-            quantitySpinner.requestFocus();
-        }
-        
-        assignedItems.put(selectedItem.getId(), quantity);
-        refreshItemsTable();
-        
-        // Reset selection
-        itemComboBox.setSelectedIndex(0);
-        quantitySpinner.setValue(1);
-    }
-    
+
     /**
      * Remove selected item
      */
@@ -594,7 +559,7 @@ public class CalamityDialog extends JDialog {
     }
     
     /**
-     * Save calamity
+     * Save calamity - Fixed to ensure proper callback execution
      */
     private void saveCalamity() {
         try {
@@ -651,10 +616,18 @@ public class CalamityDialog extends JDialog {
             
             if (success) {
                 showSuccess(calamity == null ? "Calamity created successfully!" : "Calamity updated successfully!");
-                if (onSaveCallback != null) {
-                    onSaveCallback.run();
-                }
+                
+                // Close dialog first
                 dispose();
+                
+                // Execute callback with a small delay to ensure proper refresh
+                Timer timer = new Timer(100, e -> {
+                    if (onSaveCallback != null) {
+                        onSaveCallback.run();
+                    }
+                });
+                timer.setRepeats(false);
+                timer.start();
             } else {
                 showError("Failed to save calamity.");
             }
@@ -689,5 +662,115 @@ public class CalamityDialog extends JDialog {
             JOptionPane.INFORMATION_MESSAGE
         );
     }
+    
+    // ==================== Helper Classes ====================
+    
+    /**
+     * Wrapper class for inventory items with selection state
+     */
+    private static class InventoryItemWrapper {
+        private final InventoryItem item;
+        private boolean selected;
+        
+        public InventoryItemWrapper(InventoryItem item) {
+            this.item = item;
+            this.selected = false;
+        }
+        
+        public InventoryItem getItem() { return item; }
+        public boolean isSelected() { return selected; }
+        public void setSelected(boolean selected) { this.selected = selected; }
+        
+        @Override
+        public String toString() {
+            return item.getItemName() + " (" + item.getUnit() + ") - Available: " + item.getQuantity();
+        }
+    }
+    
+    /**
+     * Custom cell renderer for checkbox list
+     */
+    private class CheckBoxListCellRenderer extends JCheckBox implements ListCellRenderer<InventoryItemWrapper> {
+        @Override
+        public Component getListCellRendererComponent(JList<? extends InventoryItemWrapper> list,
+                InventoryItemWrapper value, int index, boolean isSelected, boolean cellHasFocus) {
+            
+            setComponentOrientation(list.getComponentOrientation());
+            setFont(list.getFont());
+            setText(value.toString());
+            setSelected(value.isSelected());
+            
+            setBackground(isSelected ? list.getSelectionBackground() : list.getBackground());
+            setForeground(isSelected ? list.getSelectionForeground() : list.getForeground());
+            
+            setEnabled(list.isEnabled());
+            setOpaque(true);
+            
+            return this;
+        }
+    }
+    
+    // ==================== Multi-Select Methods ====================
+    
+    /**
+     * Add selected items to calamity
+     */
+    private void addSelectedItems(DefaultListModel<InventoryItemWrapper> listModel) {
+        java.util.List<InventoryItemWrapper> selectedItems = new java.util.ArrayList<>();
+        
+        for (int i = 0; i < listModel.getSize(); i++) {
+            InventoryItemWrapper wrapper = listModel.getElementAt(i);
+            if (wrapper.isSelected()) {
+                selectedItems.add(wrapper);
+            }
+        }
+        
+        if (selectedItems.isEmpty()) {
+            showError("Please select at least one item.");
+            return;
+        }
+        
+        int quantity = (Integer) quantitySpinner.getValue();
+        int addedCount = 0;
+        
+        for (InventoryItemWrapper wrapper : selectedItems) {
+            InventoryItem item = wrapper.getItem();
+            
+            if (assignedItems.containsKey(item.getId())) {
+                continue; // Skip already assigned items
+            }
+            
+            if (quantity > item.getQuantity()) {
+                showError(String.format(
+                    "Standard quantity (%d) for '%s' exceeds available inventory (%d %s).",
+                    quantity, item.getItemName(), item.getQuantity(), item.getUnit()
+                ));
+                continue;
+            }
+            
+            assignedItems.put(item.getId(), quantity);
+            wrapper.setSelected(false); // Deselect after adding
+            addedCount++;
+        }
+        
+        if (addedCount > 0) {
+            refreshItemsTable();
+            itemJList.repaint();
+            showSuccess(addedCount + " item(s) added successfully.");
+        }
+    }
+    
+    /**
+     * Select or deselect all items
+     */
+    private void selectAllItems(DefaultListModel<InventoryItemWrapper> listModel, JList<InventoryItemWrapper> list, boolean select) {
+        for (int i = 0; i < listModel.getSize(); i++) {
+            InventoryItemWrapper wrapper = listModel.getElementAt(i);
+            // Only select items that are not already assigned
+            if (!select || !assignedItems.containsKey(wrapper.getItem().getId())) {
+                wrapper.setSelected(select);
+            }
+        }
+        list.repaint();
+    }
 }
-

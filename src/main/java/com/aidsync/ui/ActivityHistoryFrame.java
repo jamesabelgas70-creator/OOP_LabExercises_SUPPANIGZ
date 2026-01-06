@@ -54,6 +54,22 @@ public class ActivityHistoryFrame extends JFrame {
         titleLabel.setForeground(PRIMARY_COLOR);
         headerPanel.add(titleLabel, BorderLayout.WEST);
 
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        buttonPanel.setBackground(BACKGROUND_COLOR);
+        
+        JButton backButton = new JButton("Back");
+        backButton.setFont(BUTTON_FONT);
+        backButton.setBackground(BACKGROUND_COLOR);
+        backButton.setForeground(LABEL_COLOR);
+        backButton.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(BORDER_COLOR, 1),
+            new EmptyBorder(8, 15, 8, 15)
+        ));
+        backButton.setFocusPainted(false);
+        backButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        backButton.addActionListener(e -> dispose());
+        buttonPanel.add(backButton);
+
         JButton refreshButton = new JButton("Refresh");
         refreshButton.setFont(BUTTON_FONT);
         refreshButton.setBackground(PRIMARY_COLOR);
@@ -62,7 +78,9 @@ public class ActivityHistoryFrame extends JFrame {
         refreshButton.setFocusPainted(false);
         refreshButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         refreshButton.addActionListener(e -> loadActivityLogs());
-        headerPanel.add(refreshButton, BorderLayout.EAST);
+        buttonPanel.add(refreshButton);
+        
+        headerPanel.add(buttonPanel, BorderLayout.EAST);
 
         // Table
         String[] columnNames = {"Timestamp", "User", "Action", "Details"};
@@ -86,6 +104,18 @@ public class ActivityHistoryFrame extends JFrame {
         activityTable.getTableHeader().setBackground(TABLE_HEADER_COLOR);
         activityTable.getTableHeader().setForeground(LABEL_COLOR);
         activityTable.getTableHeader().setReorderingAllowed(false);
+
+        // Add deselect on empty space functionality
+        activityTable.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                int row = activityTable.rowAtPoint(evt.getPoint());
+                if (row == -1) {
+                    // Clicked on empty space - clear selection
+                    activityTable.clearSelection();
+                }
+            }
+        });
 
         JScrollPane scrollPane = new JScrollPane(activityTable);
         scrollPane.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1));

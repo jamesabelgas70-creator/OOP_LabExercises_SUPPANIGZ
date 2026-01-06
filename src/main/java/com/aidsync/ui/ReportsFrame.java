@@ -157,8 +157,16 @@ public class ReportsFrame extends JFrame {
         titleLabel.setForeground(LABEL_COLOR);
         headerPanel.add(titleLabel, BorderLayout.WEST);
         
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, PADDING_SMALL, 0));
+        buttonPanel.setBackground(BACKGROUND_COLOR);
+        
+        JButton backButton = createActionButton("Back", BACKGROUND_COLOR, LABEL_COLOR, e -> dispose());
+        buttonPanel.add(backButton);
+        
         JButton refreshButton = createActionButton("Refresh", PRIMARY_COLOR, Color.WHITE, e -> loadAllReports());
-        headerPanel.add(refreshButton, BorderLayout.EAST);
+        buttonPanel.add(refreshButton);
+        
+        headerPanel.add(buttonPanel, BorderLayout.EAST);
         
         return headerPanel;
     }
@@ -640,12 +648,43 @@ public class ReportsFrame extends JFrame {
         table.getTableHeader().setForeground(LABEL_COLOR);
         table.getTableHeader().setReorderingAllowed(false);
         
-        // Center-left alignment
-        DefaultTableCellRenderer renderer = new DefaultTableCellRenderer();
-        renderer.setHorizontalAlignment(SwingConstants.LEFT);
-        renderer.setVerticalAlignment(SwingConstants.CENTER);
+        // Enhanced renderer with improved selection colors
+        DefaultTableCellRenderer renderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                    boolean hasFocus, int row, int column) {
+                JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                
+                label.setHorizontalAlignment(SwingConstants.LEFT);
+                label.setVerticalAlignment(SwingConstants.CENTER);
+                
+                // Enhanced selection colors
+                if (isSelected) {
+                    label.setBackground(new Color(0, 102, 204, 40)); // Semi-transparent blue
+                    label.setForeground(PRIMARY_COLOR);
+                } else {
+                    label.setBackground(BACKGROUND_COLOR);
+                    label.setForeground(LABEL_COLOR);
+                }
+                
+                return label;
+            }
+        };
+        
         table.setDefaultRenderer(Object.class, renderer);
         table.setDefaultRenderer(Integer.class, renderer);
+        
+        // Add deselect on empty space functionality
+        table.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                int row = table.rowAtPoint(evt.getPoint());
+                if (row == -1) {
+                    // Clicked on empty space - clear selection
+                    table.clearSelection();
+                }
+            }
+        });
     }
     
     /**

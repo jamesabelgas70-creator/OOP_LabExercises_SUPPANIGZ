@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+>>>>>>> origin/main
 # AidSync - Relief Distribution Management System
 
 AidSync is a desktop application for Philippine LGUs and barangays to manage relief distribution during disasters. It replaces paper lists with a digital system that prevents duplication and speeds up the process.

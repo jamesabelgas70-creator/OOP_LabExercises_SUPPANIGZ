@@ -2,7 +2,6 @@ package com.aidsync.service;
 
 import com.aidsync.dao.UserDAO;
 import com.aidsync.model.User;
-import com.aidsync.service.ActivityLogService;
 
 import java.util.List;
 

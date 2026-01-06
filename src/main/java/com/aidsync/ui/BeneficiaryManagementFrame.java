@@ -180,12 +180,14 @@ public class BeneficiaryManagementFrame extends JFrame {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, PADDING_SMALL, 0));
         buttonPanel.setBackground(BACKGROUND_COLOR);
         
+        JButton backButton = createActionButton("Back", BACKGROUND_COLOR, LABEL_COLOR, e -> dispose());
         toggleFilterButton = createActionButton("Filters", BACKGROUND_COLOR, LABEL_COLOR, e -> toggleFilterPanel());
         addButton = createActionButton("Add New", PRIMARY_COLOR, Color.WHITE, e -> openAddEditDialog(null));
         editButton = createActionButton("Edit", PRIMARY_COLOR, Color.WHITE, e -> editSelectedBeneficiary());
         deleteButton = createActionButton("Delete", DELETE_COLOR, Color.WHITE, e -> deleteSelectedBeneficiary());
         refreshButton = createActionButton("Refresh", BACKGROUND_COLOR, LABEL_COLOR, e -> loadBeneficiaries());
         
+        buttonPanel.add(backButton);
         buttonPanel.add(toggleFilterButton);
         buttonPanel.add(addButton);
         buttonPanel.add(editButton);
@@ -542,7 +544,7 @@ public class BeneficiaryManagementFrame extends JFrame {
         beneficiaryTable.getTableHeader().setForeground(LABEL_COLOR);
         beneficiaryTable.getTableHeader().setReorderingAllowed(false);
         
-        // Custom renderer for Integer columns (to left-align numbers)
+        // Custom renderer for Integer columns with improved selection
         beneficiaryTable.setDefaultRenderer(Integer.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
@@ -553,11 +555,20 @@ public class BeneficiaryManagementFrame extends JFrame {
                 label.setHorizontalAlignment(SwingConstants.LEFT);
                 label.setVerticalAlignment(SwingConstants.CENTER);
                 
+                // Enhanced selection colors
+                if (isSelected) {
+                    label.setBackground(new Color(0, 102, 204, 40)); // Semi-transparent blue
+                    label.setForeground(PRIMARY_COLOR);
+                } else {
+                    label.setBackground(BACKGROUND_COLOR);
+                    label.setForeground(LABEL_COLOR);
+                }
+                
                 return label;
             }
         });
         
-        // Custom renderer for all other cells (center-left alignment)
+        // Custom renderer for all other cells with improved selection
         beneficiaryTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
@@ -568,6 +579,15 @@ public class BeneficiaryManagementFrame extends JFrame {
                 label.setHorizontalAlignment(SwingConstants.LEFT);
                 label.setVerticalAlignment(SwingConstants.CENTER);
                 
+                // Enhanced selection colors
+                if (isSelected) {
+                    label.setBackground(new Color(0, 102, 204, 40)); // Semi-transparent blue
+                    label.setForeground(PRIMARY_COLOR);
+                } else {
+                    label.setBackground(BACKGROUND_COLOR);
+                    label.setForeground(LABEL_COLOR);
+                }
+                
                 return label;
             }
         });
@@ -576,11 +596,15 @@ public class BeneficiaryManagementFrame extends JFrame {
         beneficiaryTable.setRowSelectionAllowed(true);
         beneficiaryTable.setColumnSelectionAllowed(false);
         
-        // Add double-click to edit
+        // Add double-click to edit and deselect on empty space
         beneficiaryTable.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent evt) {
-                if (evt.getClickCount() == 2) {
+                int row = beneficiaryTable.rowAtPoint(evt.getPoint());
+                if (row == -1) {
+                    // Clicked on empty space - clear selection
+                    beneficiaryTable.clearSelection();
+                } else if (evt.getClickCount() == 2) {
                     editSelectedBeneficiary();
                 }
             }
